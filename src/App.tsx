@@ -15,6 +15,7 @@ import {
   Menu,
   Shield,
   ShieldAlert,
+  ShieldCheck,
   Send,
   UserCircle2
 } from 'lucide-react';
@@ -72,12 +73,18 @@ export default function App() {
   const [rawText, setRawText] = useState('');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [companyContext, setCompanyContext] = useState('');
+  const [editingGuide, setEditingGuide] = useState('');
+  const [editingAssignee, setEditingAssignee] = useState('');
+  const [editingRequester, setEditingRequester] = useState('');
+  const [editingDescription, setEditingDescription] = useState('');
   
   // Comment Input State
   const [newComment, setNewComment] = useState('');
   const [commentAuthor, setCommentAuthor] = useState('팀원');
 
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+  // Initialize AI safely
+  const apiKey = process.env.GEMINI_API_KEY || '';
+  const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
   // Load company context
   useEffect(() => {
@@ -130,6 +137,16 @@ export default function App() {
     }
   };
 
+  // Sync editing states when a task is selected
+  useEffect(() => {
+    if (selectedTask) {
+      setEditingGuide(selectedTask.ai_execution_plan || '');
+      setEditingAssignee(selectedTask.assignee || '');
+      setEditingRequester(selectedTask.requester || '');
+      setEditingDescription(selectedTask.description || '');
+    }
+  }, [selectedTask?.id]);
+
   const addComment = async () => {
     if (!selectedTask || !newComment.trim()) return;
     const commentObj: Comment = {
@@ -160,11 +177,34 @@ export default function App() {
     }
   };
 
+  const updateRequester = async (newVal: string) => {
+    if (!selectedTask || !isAdminMode) return;
+    try {
+      await updateDoc(doc(db, 'tasks', selectedTask.id), { requester: newVal });
+      setSelectedTask(prev => prev ? { ...prev, requester: newVal } : null);
+    } catch (err) {
+      console.error('Failed to update requester', err);
+    }
+  };
+
+  const updateDescription = async (newVal: string) => {
+    if (!selectedTask || !isAdminMode) return;
+    try {
+      await updateDoc(doc(db, 'tasks', selectedTask.id), { description: newVal });
+      setSelectedTask(prev => prev ? { ...prev, description: newVal } : null);
+    } catch (err) {
+      console.error('Failed to update description', err);
+    }
+  };
+
   const confirmGuide = async () => {
     if (!selectedTask || !isAdminMode) return;
     try {
-      await updateDoc(doc(db, 'tasks', selectedTask.id), { is_guide_confirmed: true });
-      setSelectedTask(prev => prev ? { ...prev, is_guide_confirmed: true } : null);
+      await updateDoc(doc(db, 'tasks', selectedTask.id), { 
+        ai_execution_plan: editingGuide,
+        is_guide_confirmed: true 
+      });
+      setSelectedTask(prev => prev ? { ...prev, ai_execution_plan: editingGuide, is_guide_confirmed: true } : null);
     } catch (err) {
       console.error('Failed to confirm guide', err);
     }
@@ -230,6 +270,10 @@ If year is missing in source, assume 2026. Do NOT wrap in markdown code blocks, 
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.[0] || !isAdminMode) return;
+    if (!ai) {
+      alert("Gemini API 키가 설정되지 않았습니다. .env 파일을 확인해 주세요.");
+      return;
+    }
     setIsUploading(true);
     const file = e.target.files[0];
 
@@ -261,6 +305,10 @@ If year is missing in source, assume 2026. Do NOT wrap in markdown code blocks, 
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.[0] || !isAdminMode) return;
+    if (!ai) {
+      alert("Gemini API 키가 설정되지 않았습니다. .env 파일을 확인해 주세요.");
+      return;
+    }
     setIsProcessingImage(true);
     const file = e.target.files[0];
 
@@ -293,6 +341,10 @@ If year is missing in source, assume 2026. Do NOT wrap in markdown code blocks, 
 
   const handleTextExtract = async () => {
     if (!rawText.trim() || !isAdminMode) return;
+    if (!ai) {
+      alert("Gemini API 키가 설정되지 않았습니다. .env 파일을 확인해 주세요.");
+      return;
+    }
     setIsProcessingText(true);
     try {
       const response = await ai.models.generateContent({
@@ -626,8 +678,9 @@ If year is missing in source, assume 2026. Do NOT wrap in markdown code blocks, 
                         <div className="space-y-3">
                           <textarea 
                             className="w-full h-32 bg-white border border-[#141414]/20 p-2 text-xs font-mono resize-none focus:outline-none"
-                            value={selectedTask.ai_execution_plan || ''}
-                            onChange={(e) => updateGuideText(e.target.value)}
+                            value={editingGuide}
+                            onChange={(e) => setEditingGuide(e.target.value)}
+                            onBlur={(e) => updateGuideText(e.target.value)}
                           />
                           <button 
                             onClick={confirmGuide}
@@ -657,8 +710,10 @@ If year is missing in source, assume 2026. Do NOT wrap in markdown code blocks, 
                           type="text"
                           placeholder="팀원 이름 입력..."
                           className="w-full bg-transparent border-b border-[#141414]/30 py-2 text-sm focus:outline-none focus:border-[#141414] transition-colors"
-                          value={selectedTask.assignee || ''}
-                          onChange={(e) => updateAssignee(e.target.value)}
+                          value={editingAssignee}
+                          onChange={(e) => setEditingAssignee(e.target.value)}
+                          onBlur={(e) => updateAssignee(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && updateAssignee(e.currentTarget.value)}
                         />
                       ) : (
                         <div className="flex items-center space-x-2 bg-white/50 p-2 border border-[#141414]/10">

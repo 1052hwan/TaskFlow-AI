@@ -5,11 +5,12 @@ import {defineConfig, loadEnv} from 'vite';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
-  return {
-    plugins: [react(), tailwindcss()],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-    },
+ return {
+  base: "/TaskFlow-AI/",   // ← 이 줄 추가 (레포 이름과 동일)
+  plugins: [react(), tailwindcss()],
+  define: {
+    'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
+  },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
